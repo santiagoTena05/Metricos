@@ -3,8 +3,10 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/database';
 import 'firebase/compat/storage';
 
-class AppLit extends LitElement {
-  static get properties() {
+class AppLit extends LitElement 
+{
+  static get properties() 
+  {
     return {
       emial : {type: String},
       password : {type: String},
@@ -70,7 +72,8 @@ class AppLit extends LitElement {
     }
   `;
 
-  constructor() {
+  constructor() 
+  {
     super();
     this.email = '';
     this.password = '';
@@ -79,12 +82,14 @@ class AppLit extends LitElement {
     this.objectStoreName = 'answers';
   }
 
-  connectedCallback() {
+  connectedCallback()
+  {
     super.connectedCallback();
     this.__openDatabase();
   }
 
-  __openDatabase() {
+  __openDatabase() 
+  {
     const request = indexedDB.open(this.databaseName);
     request.onerror = (event) => {
       console.error('Failed to open database', event);
@@ -108,15 +113,21 @@ class AppLit extends LitElement {
     };
   }  
         
-  __uploadToFirebase() {
-
+  // Fixed indentation and curly brackets. May not be the intended functionality.
+  __uploadToFirebase() 
+  {
     const objectStore = this.db.transaction(this.objectStoreName, 'readwrite').objectStore(this.objectStoreName);
-    objectStore.getAll().onsuccess = (event) => {
+    objectStore.getAll().onsuccess = (event) => 
+    {
       const answers = event.target.result;
       const storageRef = firebase.storage().ref();
-      answers.forEach((answer) => {
+      answers.forEach((answer) => {});
+    }
+  }
 
-  render() {
+  // The app loads, and a login screen shows up, but the register function is not defined.
+  render() 
+  {
     return html`
       <div class="container">
           <div class="formgroup">
@@ -138,7 +149,6 @@ class AppLit extends LitElement {
           </div>
       </div>
     `;
-
   }
 }
 
