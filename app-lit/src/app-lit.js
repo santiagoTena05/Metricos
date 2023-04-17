@@ -2,15 +2,18 @@ import { LitElement, html, css } from 'lit';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/database';
 import 'firebase/compat/storage';
+import 'firebase/compat/auth';
 
 class AppLit extends LitElement {
   static get properties() {
     return {
-      emial : {type: String},
+      email : {type: String},
       password : {type: String},
       username : {type: String},
       databaseName: { type: String },
       objectStoreName: { type: String },
+      notes: { type: Array },
+      isAuthenticated: { type: Boolean }
     };
   }
 
@@ -30,6 +33,7 @@ class AppLit extends LitElement {
       width: 100vw;
       height: 100vh;
       gap: 60px;
+      padding: 60px;
     }
     
     #button {
@@ -68,6 +72,17 @@ class AppLit extends LitElement {
       text-align: center;
       box-shadow: 0 0 20px 0 rgba(0, 0, 0, 0.2), 0 5px 5px 0 rgba(0, 0, 0, 0.24);
     }
+
+    #notes {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      gap: 60px;
+      margin: 0 0 15px;
+    }
   `;
 
   constructor() {
@@ -77,6 +92,8 @@ class AppLit extends LitElement {
     this.username = '';
     this.databaseName = 'my-database';
     this.objectStoreName = 'answers';
+    this.notes = [];
+    this.isAuthenticated = false; // initial value is false
   }
 
   connectedCallback() {
@@ -107,36 +124,136 @@ class AppLit extends LitElement {
       this.firebaseDb = firebase.database();
     };
   }  
-        
-  __uploadToFirebase() {
+      
+  async register() {
+    try {
+      const response = await firebase.auth().createUserWithEmailAndPassword(this.email, this.password);
+      const user = response.user;
+      await user.updateProfile({
+        displayName: this.username
+      });
 
+      let data = { email: this.email, password: this.password, username: this.username };
+
+      console.log(data);
+
+      this.firebaseDb.ref('users/' + user.uid).push(data);
+
+      const databaseRef = firebase.database().ref('answers');
+      databaseRef.push(data);
+
+      this.__uploadToFirebase();
+
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async logout() {
+    firebase.auth().signOut();
+    this.isAuthenticated = false;
+    this.requestUpdate();
+  }
+
+  async login() {
+    try {
+      const response = await firebase.auth().signInWithEmailAndPassword(this.email, this.password);
+      console.log(response.user);
+      this.isAuthenticated = true;
+      this.requestUpdate();
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    }
+  }
+  
+  async addNote() {
+    const input = this.shadowRoot.querySelector('#note');
+    const note = input.value.trim();
+    if (note !== '') {
+      this.notes = [...this.notes, note];
+      input.value = '';
+      this.__updateNotesInFirebase();
+    }
+  }
+  
+  async deleteNote(index) {
+    this.notes = this.notes.filter((note, i) => i !== index);
+    this.__updateNotesInFirebase();
+  }
+  
+  __updateNotesInFirebase() {
+    const userId = firebase.auth().currentUser.uid;
+    const notesRef = firebase.database().ref(`users/${userId}/notes`);
+    notesRef.set(this.notes);
+  }
+
+  __uploadToFirebase() {
     const objectStore = this.db.transaction(this.objectStoreName, 'readwrite').objectStore(this.objectStoreName);
     objectStore.getAll().onsuccess = (event) => {
       const answers = event.target.result;
-      const storageRef = firebase.storage().ref();
+      const firebaseDb = firebase.database();
+      const userId = firebase.auth().currentUser.uid;
+      const answersRef = firebaseDb.ref(`users/${userId}/answers`);
       answers.forEach((answer) => {
+        answersRef.push(answer);
+      });
+      objectStore.clear();
+    };
+  }
 
-  render() {
+
+  loginAdnSignupTemplate() {
     return html`
       <div class="container">
           <div class="formgroup">
             <div class="login">
               <h2>Login</h2>
               <br>
-              <input id="username" type="text" placeholder="Username">
-              <input id="password" type="password" placeholder="Password" class="form-control" name="password">
-              <button onclick="login()" id="button">SIGN IN</button>
+              <input id="email" type="email" placeholder="Email" @input=${(event) => this.email = event.target.value}>
+              <input id="password" type="password" placeholder="Password" class="form-control" name="password" @input=${(event) => this.password = event.target.value}>
+                <button @click=${this.login} id="button">SIGN IN</button>
               <br><br><hr><br>
             </div>
             <div class="signup">
               <h2>Sign Up</h2>
               <br>
-              <input id="email" type="email" placeholder="Email">
-              <input id="password" type="password" placeholder="Password" class="form-control" name="password">
-              <input id="username" type="text" placeholder="Username">
-              <button onclick="register()" id="button">SIGN UP</button>
+              <input id="email" type="email" placeholder="Email" @input=${(event) => this.email = event.target.value}>
+              <input id="password" type="password" placeholder="Password" class="form-control" name="password" @input=${(event) => this.password = event.target.value}>
+              <input id="username" type="text" placeholder="Username" class="form-control" name="username" @input=${(event) => this.username = event.target.value}>
+              <button @click=${this.register} id="button">SIGN UP</button>
+            </div>
           </div>
       </div>
+    `;
+  }
+
+  notesTemplate() {
+    return html`
+      <div class="container" id="notes">
+        <h2>Notes</h2>
+        <div class="formgroup">
+          <input type="text" id="note" placeholder="Note" />
+          <button id="button" @click=${this.addNote}>Add Note</button>
+        </div>
+        <div class="notes" id="notes">
+          ${this.notes.map((note, index) => html`
+            <div class="note">
+              <span>${note}</span>
+              <button @click=${() => this.deleteNote(index)}>Delete</button>
+            </div>
+          `)}
+        </div>
+      </div>
+    `;
+  }
+  
+
+
+  render() {
+    return html`
+
+      ${this.isAuthenticated ? this.notesTemplate() : this.loginAdnSignupTemplate()}
     `;
 
   }
